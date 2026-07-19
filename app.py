@@ -1,3 +1,6 @@
+import json
+from datetime import date, datetime
+from pathlib import Path
 import streamlit as st
 from tools.blog_writer import write_blog
 from tools.email_reply import write_email_reply
@@ -13,39 +16,179 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.markdown("""
-<style>
-    .main-title {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #1f2937;
-        margin-bottom: 0.25rem;
-    }
-    .sub-title {
-        font-size: 0.95rem;
-        color: #6b7280;
-        margin-bottom: 1.5rem;
-    }
-    .tool-card {
-        background: #f9fafb;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 0.5rem;
-        border-left: 4px solid #6366f1;
-    }
-    .stButton > button {
-        background-color: #6366f1;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 0.5rem 1.5rem;
-        font-weight: 600;
-    }
-    .stButton > button:hover {
-        background-color: #4f46e5;
-    }
-</style>
-""", unsafe_allow_html=True)
+# ── テーマ定義 ──────────────────────────────────────────────
+THEME_CONFIG = {
+    "carp": {
+        "label": "⚾ カープ",
+        "sidebar_icon": "⚾",
+        "sidebar_title": "AI ライティングツール",
+        "sidebar_sub": "広島東洋カープ応援中！",
+        "css": """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+        html, body, .stApp, p, label, .stMarkdown, .stTextArea textarea,
+        .stTextInput input, .stSelectbox, .stButton button, .stRadio,
+        .stCheckbox, .element-container {
+            font-family: 'Noto Sans JP', sans-serif !important;
+        }
+        .stApp { background-color: #fafafa; }
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #C8102E 0%, #8B0000 100%) !important;
+        }
+        [data-testid="stSidebar"] * { color: #ffffff !important; }
+        [data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.3) !important; }
+        .main-title {
+            font-size: 2rem; font-weight: 900; color: #C8102E;
+            margin-bottom: 0.25rem;
+            border-left: 6px solid #C8102E; padding-left: 0.6rem;
+        }
+        .sub-title {
+            font-size: 0.95rem; color: #6b7280;
+            margin-bottom: 1.5rem; padding-left: 0.8rem;
+        }
+        .stButton > button {
+            background-color: #C8102E !important; color: white !important;
+            border: none !important; border-radius: 6px !important;
+            font-weight: 700 !important;
+        }
+        .stButton > button:hover { background-color: #8B0000 !important; }
+        .stTextArea textarea, .stTextInput input {
+            border: 1.5px solid #e8b4b8 !important; border-radius: 8px !important;
+        }
+        .stTextArea textarea:focus, .stTextInput input:focus {
+            border-color: #C8102E !important;
+            box-shadow: 0 0 0 2px rgba(200,16,46,0.15) !important;
+        }
+        hr { border-color: #f5c6cb !important; }
+        [data-testid="stDownloadButton"] button {
+            border: 2px solid #C8102E !important; color: #C8102E !important;
+            background: white !important; font-weight: 700 !important;
+            border-radius: 6px !important;
+        }
+        [data-testid="stDownloadButton"] button:hover { background: #fff0f0 !important; }
+        </style>
+        """,
+    },
+    "koupen": {
+        "label": "🐧 コウペンちゃん",
+        "sidebar_icon": "🐧",
+        "sidebar_title": "AI ライティングツール",
+        "sidebar_sub": "えらい！すごい！できてる！🍀",
+        "css": """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap');
+        html, body, .stApp, p, label, .stMarkdown, .stTextArea textarea,
+        .stTextInput input, .stSelectbox, .stButton button, .stRadio,
+        .stCheckbox, .element-container {
+            font-family: 'M PLUS Rounded 1c', sans-serif !important;
+        }
+        .stApp {
+            background: linear-gradient(160deg, #fff0f8 0%, #e8f6ff 50%, #f0fff6 100%) !important;
+        }
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #ff8fab 0%, #a8d8ea 100%) !important;
+        }
+        [data-testid="stSidebar"] * { color: #3d2040 !important; }
+        [data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.5) !important; }
+        .main-title {
+            font-size: 2rem; font-weight: 700; color: #d45f82;
+            margin-bottom: 0.25rem;
+            border-left: 6px solid #ffb3c6; padding-left: 0.6rem;
+        }
+        .sub-title {
+            font-size: 0.95rem; color: #888;
+            margin-bottom: 1.5rem; padding-left: 0.8rem;
+        }
+        .stButton > button {
+            background: linear-gradient(135deg, #ff8fab, #ffb3c6) !important;
+            color: white !important; border: none !important;
+            border-radius: 25px !important; font-weight: 700 !important;
+        }
+        .stButton > button:hover {
+            background: linear-gradient(135deg, #ff6b8a, #ff8fab) !important;
+        }
+        .stTextArea textarea, .stTextInput input {
+            border: 2px solid #ffb3c6 !important;
+            border-radius: 14px !important; background: #fff8fb !important;
+        }
+        .stTextArea textarea:focus, .stTextInput input:focus {
+            border-color: #ff8fab !important;
+            box-shadow: 0 0 0 2px rgba(255,143,171,0.2) !important;
+        }
+        hr { border-color: #ffd6e4 !important; }
+        [data-testid="stDownloadButton"] button {
+            border: 2px solid #ff8fab !important; color: #d45f82 !important;
+            background: white !important; font-weight: 700 !important;
+            border-radius: 20px !important;
+        }
+        </style>
+        """,
+    },
+    "orchestra": {
+        "label": "🎻 オーケストラ",
+        "sidebar_icon": "🎻",
+        "sidebar_title": "AI ライティングツール",
+        "sidebar_sub": "♩ Powered by Gemini 2.0 Flash",
+        "css": """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap');
+        html, body, .stApp, p, label, .stMarkdown, .stTextArea textarea,
+        .stTextInput input, .stSelectbox, .stButton button, .stRadio,
+        .stCheckbox, .element-container {
+            font-family: 'Noto Serif JP', serif !important;
+        }
+        .stApp { background-color: #FAFAF5; }
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #1E1E2E 0%, #0D0D1A 100%) !important;
+        }
+        [data-testid="stSidebar"] * { color: #E8DCC8 !important; }
+        [data-testid="stSidebar"] hr { border-color: rgba(201,168,76,0.4) !important; }
+        .main-title {
+            font-size: 2rem; font-weight: 700; color: #1E1E2E;
+            margin-bottom: 0.25rem;
+            border-left: 6px solid #C9A84C; padding-left: 0.6rem;
+        }
+        .sub-title {
+            font-size: 0.95rem; color: #7a7060;
+            margin-bottom: 1.5rem; padding-left: 0.8rem;
+        }
+        .stButton > button {
+            background-color: #1E1E2E !important; color: #C9A84C !important;
+            border: 1.5px solid #C9A84C !important;
+            border-radius: 4px !important; font-weight: 700 !important;
+        }
+        .stButton > button:hover {
+            background-color: #C9A84C !important; color: #1E1E2E !important;
+        }
+        .stTextArea textarea, .stTextInput input {
+            border: 1.5px solid #C9A84C !important; border-radius: 4px !important;
+            background: #FDFCF7 !important;
+        }
+        .stTextArea textarea:focus, .stTextInput input:focus {
+            border-color: #a8893a !important;
+            box-shadow: 0 0 0 2px rgba(201,168,76,0.2) !important;
+        }
+        hr { border-color: #e8d9a0 !important; }
+        [data-testid="stDownloadButton"] button {
+            border: 1.5px solid #1E1E2E !important; color: #1E1E2E !important;
+            background: #FAFAF5 !important; font-weight: 700 !important;
+            border-radius: 4px !important;
+        }
+        [data-testid="stDownloadButton"] button:hover { background: #f0ede0 !important; }
+        </style>
+        """,
+    },
+}
+
+# ── テーマ初期化 ──────────────────────────────────────────────
+if "theme" not in st.session_state:
+    st.session_state.theme = "carp"
+
+theme = st.session_state.theme
+cfg = THEME_CONFIG[theme]
+
+# テーマCSS適用
+st.markdown(cfg["css"], unsafe_allow_html=True)
 
 TOOLS = {
     "📝 ブログ記事作成": "blog",
@@ -54,21 +197,50 @@ TOOLS = {
     "🔍 文章校正・改善": "proofread",
     "📱 SNS投稿文作成": "social",
     "🔄 文体変換": "tone",
+    "📅 スケジュール管理": "calendar",
 }
 
+SCHEDULE_FILE = Path(__file__).parent / "schedule.json"
+
+def load_schedule():
+    return json.loads(SCHEDULE_FILE.read_text(encoding="utf-8"))
+
+def save_schedule(events):
+    SCHEDULE_FILE.write_text(json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8")
+
+# ── サイドバー ──────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## ✍️ AI ライティングツール")
+    st.markdown(f"""
+    <div style='text-align:center; padding:0.5rem 0 0.2rem;'>
+        <div style='font-size:2.2rem;'>{cfg["sidebar_icon"]}</div>
+        <div style='font-size:1.1rem; font-weight:900; letter-spacing:1px;'>{cfg["sidebar_title"]}</div>
+        <div style='font-size:0.75rem; opacity:0.8; margin-top:2px;'>{cfg["sidebar_sub"]}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # テーマ切り替え
+    st.markdown("<div style='font-size:0.8rem; opacity:0.8; margin-bottom:4px;'>テーマ</div>", unsafe_allow_html=True)
+    theme_keys = ["carp", "koupen", "orchestra"]
+    theme_labels = {"carp": "⚾ カープ", "koupen": "🐧 コウペン", "orchestra": "🎻 オーケストラ"}
+    selected_theme = st.radio(
+        "テーマ選択",
+        theme_keys,
+        format_func=lambda x: theme_labels[x],
+        index=theme_keys.index(st.session_state.theme),
+        label_visibility="collapsed",
+    )
+    if selected_theme != st.session_state.theme:
+        st.session_state.theme = selected_theme
+        st.rerun()
+
     st.markdown("---")
     st.markdown("**ツールを選んでください**")
     selected_label = st.radio(
         "ツール選択",
         list(TOOLS.keys()),
         label_visibility="collapsed",
-    )
-    st.markdown("---")
-    st.markdown(
-        "<small style='color:#9ca3af'>Powered by Gemini 2.0 Flash</small>",
-        unsafe_allow_html=True,
     )
 
 tool = TOOLS[selected_label]
@@ -246,8 +418,21 @@ elif tool == "tone":
 
     target_tone = st.selectbox(
         "変換先の文体",
-        ["丁寧・敬語", "フォーマル・ビジネス", "カジュアル・友達口調", "やわらかく親しみやすい", "力強く説得力のある", "シンプル・わかりやすい"],
+        ["丁寧・敬語", "フォーマル・ビジネス", "カジュアル・友達口調", "やわらかく親しみやすい", "力強く説得力のある", "シンプル・わかりやすい", "コウペンちゃん風"],
     )
+
+    if target_tone == "コウペンちゃん風":
+        st.markdown("""
+        <div style="text-align:center; font-size:2rem; letter-spacing:4px; margin:0.5rem 0;">
+            🍀🐧🍀🐧🍀🐧🍀
+        </div>
+        <div style="text-align:center; background:linear-gradient(135deg,#ffb3c6,#a8d8ea);
+            border-radius:18px; padding:0.9rem 1rem; margin-bottom:1rem;">
+            <span style="font-size:1.05rem; color:white; font-weight:700;">
+                なんでもコウペンちゃん風に変換するよ〜！えらい！🐧🍀
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
 
     if st.button("文体を変換する", use_container_width=True):
         if not text.strip():
@@ -261,3 +446,65 @@ elif tool == "tone":
                     st.error(str(e))
                 except Exception as e:
                     st.error(f"エラーが発生しました: {e}")
+
+
+# ── スケジュール管理 ──────────────────────────────────────────────
+elif tool == "calendar":
+    st.markdown('<div class="sub-title">予定を登録・確認できます。データはローカルに保存されます。</div>', unsafe_allow_html=True)
+
+    events = load_schedule()
+
+    st.subheader("＋ 予定を追加する")
+    col1, col2 = st.columns(2)
+    with col1:
+        new_title = st.text_input("タイトル *", placeholder="例: チームミーティング")
+        new_date = st.date_input("日付 *", value=date.today())
+    with col2:
+        new_time = st.text_input("時間（任意）", placeholder="例: 14:00")
+        new_note = st.text_input("メモ（任意）", placeholder="例: Zoom URLを確認する")
+
+    if st.button("予定を保存する", use_container_width=True):
+        if not new_title.strip():
+            st.warning("タイトルを入力してください。")
+        else:
+            events.append({
+                "id": datetime.now().isoformat(),
+                "title": new_title.strip(),
+                "date": new_date.isoformat(),
+                "time": new_time.strip(),
+                "note": new_note.strip(),
+            })
+            events.sort(key=lambda e: e["date"])
+            save_schedule(events)
+            st.success("予定を保存しました。")
+            st.rerun()
+
+    st.markdown("---")
+    st.subheader("予定一覧")
+
+    if not events:
+        st.info("予定はまだありません。")
+    else:
+        today_str = date.today().isoformat()
+        upcoming = [e for e in events if e["date"] >= today_str]
+        past = [e for e in events if e["date"] < today_str]
+
+        def render_events(event_list):
+            for e in event_list:
+                col_info, col_del = st.columns([5, 1])
+                with col_info:
+                    time_str = f" {e['time']}" if e["time"] else ""
+                    note_str = f"　{e['note']}" if e["note"] else ""
+                    st.markdown(f"**{e['date']}{time_str}　{e['title']}**{note_str}")
+                with col_del:
+                    if st.button("削除", key=f"del_{e['id']}"):
+                        events.remove(e)
+                        save_schedule(events)
+                        st.rerun()
+
+        if upcoming:
+            st.markdown("**今日以降の予定**")
+            render_events(upcoming)
+        if past:
+            with st.expander("過去の予定"):
+                render_events(past)
