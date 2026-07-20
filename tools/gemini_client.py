@@ -3,7 +3,7 @@ import re
 import time
 
 from google import genai
-from google.api_core.exceptions import ResourceExhausted
+from google.genai import errors as genai_errors
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,7 +22,7 @@ def get_client():
     return _client
 
 
-def _retry_delay(error: ResourceExhausted) -> float:
+def _retry_delay(error: Exception) -> float:
     match = re.search(r"retry in ([\d.]+)s", str(error), re.IGNORECASE)
     if match:
         return float(match.group(1)) + 1
@@ -39,9 +39,12 @@ def generate(prompt: str) -> str:
                 contents=prompt,
             )
             return response.text
-        except ResourceExhausted as e:
-            last_error = e
-            if attempt == MAX_RETRIES - 1:
+        except genai_errors.ClientError as e:
+            if e.code == 429:
+                last_error = e
+                if attempt == MAX_RETRIES - 1:
+                    raise
+                time.sleep(_retry_delay(e))
+            else:
                 raise
-            time.sleep(_retry_delay(e))
     raise last_error
