@@ -2,25 +2,24 @@ import os
 import re
 import time
 
-import google.generativeai as genai
-from dotenv import load_dotenv
+from google import genai
 from google.api_core.exceptions import ResourceExhausted
+from dotenv import load_dotenv
 
 load_dotenv()
 
-_model = None
+_client = None
 MAX_RETRIES = 3
 
 
-def get_model():
-    global _model
-    if _model is None:
+def get_client():
+    global _client
+    if _client is None:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key or api_key == "your_api_key_here":
             raise ValueError("GEMINI_API_KEY が設定されていません。.env ファイルを確認してください。")
-        genai.configure(api_key=api_key)
-        _model = genai.GenerativeModel("gemini-3.1-flash-lite")
-    return _model
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 
 def _retry_delay(error: ResourceExhausted) -> float:
@@ -31,11 +30,14 @@ def _retry_delay(error: ResourceExhausted) -> float:
 
 
 def generate(prompt: str) -> str:
-    model = get_model()
+    client = get_client()
     last_error = None
     for attempt in range(MAX_RETRIES):
         try:
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model="gemini-3.1-flash-lite",
+                contents=prompt,
+            )
             return response.text
         except ResourceExhausted as e:
             last_error = e
